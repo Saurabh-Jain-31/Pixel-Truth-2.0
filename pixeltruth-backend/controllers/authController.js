@@ -1,6 +1,9 @@
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const createLog = require('../utils/logger');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // POST /api/auth/register
 const register = async (req, res, next) => {
@@ -92,4 +95,59 @@ const getMe = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, logout, getMe };
+// POST /api/auth/google
+const googleAuth = async (req, res, next) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) return res.status(400).json({ message: 'Google credential is required.' });
+
+    // Verify the Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    // Find or create user
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      // Link Google ID if signed up manually before
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.avatar = picture;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        name,
+        email,
+        googleId,
+        avatar: picture,
+        role: 'consumer',
+      });
+      await createLog({
+        level: 'INFO',
+        message: `New Google user registered: ${email}`,
+        user: email,
+        userId: user._id,
+      });
+    }
+
+    const token = generateToken(user._id);
+
+    await createLog({
+      level: 'INFO',
+      message: `Google sign-in: ${email}`,
+      user: email,
+      userId: user._id,
+    });
+
+    res.json({ token, user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, login, logout, getMe, googleAuth };

@@ -9,6 +9,9 @@ const errorHandler = require('./middleware/errorHandler');
 const authRoutes    = require('./routes/authRoutes');
 const contentRoutes = require('./routes/contentRoutes');
 const adminRoutes   = require('./routes/adminRoutes');
+const aiRoutes      = require('./routes/aiRoutes');
+const youtubeRoutes    = require('./routes/youtubeRoutes');
+const instagramRoutes  = require('./routes/instagramRoutes');
 
 // Connect to MongoDB
 connectDB();
@@ -36,9 +39,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/auth',  authRoutes);     // /api/auth/register, /api/auth/login ...
-app.use('/api',       contentRoutes);  // /api/upload, /api/history, /api/results/:id
-app.use('/api/admin', adminRoutes);    // /api/admin/stats, /api/admin/users ...
+app.use('/api/auth',    authRoutes);
+app.use('/api',        contentRoutes);
+app.use('/api/admin',  adminRoutes);
+app.use('/api/ai',     aiRoutes);
+app.use('/api/youtube',   youtubeRoutes);
+app.use('/api/instagram', instagramRoutes);
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

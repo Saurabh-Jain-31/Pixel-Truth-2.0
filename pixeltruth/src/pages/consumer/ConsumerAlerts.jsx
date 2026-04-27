@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, AlertTriangle } from 'lucide-react';
+import { Bell, AlertTriangle, Bot } from 'lucide-react';
 import { getHistory } from '../../api/content';
 import StatusBadge from '../../components/StatusBadge';
+import AiChat from '../../components/AiChat';
 
 export default function ConsumerAlerts() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [aiQuery, setAiQuery] = useState(null);
 
   useEffect(() => {
     getHistory()
@@ -85,6 +87,12 @@ export default function ConsumerAlerts() {
                       {alert.confidence != null && <span>Confidence: <strong>{alert.confidence}%</strong></span>}
                       {alert.isAiGenerated != null && <span>Detection: <strong>{alert.isAiGenerated ? 'AI Generated' : 'Real'}</strong></span>}
                     </div>
+                    <button
+                      onClick={() => setAiQuery(`My file "${alert.fileName}" was flagged as ${alert.status} with ${alert.matchPercent}% match. What should I do?`)}
+                      className="mt-3 flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                    >
+                      <Bot size={12} /> Ask AI what to do
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -92,6 +100,7 @@ export default function ConsumerAlerts() {
           </div>
         </AnimatePresence>
       )}
+      <AiChat initialMessage={aiQuery} onInitialMessageConsumed={() => setAiQuery(null)} />
     </div>
   );
 }

@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import DashboardSidebar from './DashboardSidebar';
+import AiChat from './AiChat';
 import { Bell, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const titles = {
   '/dashboard': 'Overview',
   '/dashboard/upload': 'Upload & Analyze',
+  '/dashboard/youtube':    'YouTube Analyzer',
+  '/dashboard/instagram':  'Instagram Analyzer',
   '/dashboard/history': 'Upload History',
   '/dashboard/alerts': 'Alerts',
 };
@@ -43,6 +46,7 @@ export default function DashboardLayout() {
       <Toaster position="top-right" toastOptions={{
         style: { background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', fontSize: '13px' }
       }} />
+      <AiChat />
     </div>
   );
 }

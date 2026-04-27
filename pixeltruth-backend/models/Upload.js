@@ -48,13 +48,17 @@ const uploadSchema = new mongoose.Schema(
       default: null,
     },
 
-    // Fingerprint data
+    // Fingerprint data — Step 2 (Fingerprinting Engine)
     perceptualHash: {
-      type: String,
+      type: String,   // dHash (difference hash)
+      default: null,
+    },
+    aHash: {
+      type: String,   // average hash
       default: null,
     },
     featureVector: {
-      type: [Number], // CNN feature vector
+      type: [Number], // 32-dim statistical feature vector
       default: [],
     },
 
@@ -70,6 +74,14 @@ const uploadSchema = new mongoose.Schema(
     message: {
       type: String,
       default: '',
+    },
+
+    // Gemini AI insights
+    aiInsights: {
+      contentDescription: String,
+      manipulationSigns: [String],
+      riskFactors: [String],
+      contentCategory: String,
     },
   },
   { timestamps: true }

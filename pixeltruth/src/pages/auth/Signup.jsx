@@ -1,38 +1,28 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { Shield, Eye, EyeOff, Loader, AlertCircle } from 'lucide-react';
-import { register } from '../../api/auth';
+import { GoogleLogin } from '@react-oauth/google';
+import { Shield, Loader, AlertCircle } from 'lucide-react';
+import { googleLogin } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
+import { useState } from 'react';
 
 export default function Signup() {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'consumer' });
-  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGoogle = async (credentialResponse) => {
     setError('');
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
     setLoading(true);
     try {
-      const { data } = await register(form);
+      const { data } = await googleLogin(credentialResponse.credential);
       signIn(data.token, data.user);
-      toast.success(`Account created! Welcome, ${data.user.name}`);
-      navigate(data.user.role === 'admin' ? '/admin' : '/dashboard');
+      toast.success(`Account ready! Welcome, ${data.user.name}`);
+      navigate('/dashboard');
     } catch (err) {
-      const msg =
-        err.response?.data?.message ||
-        (err.code === 'ERR_NETWORK'
-          ? 'Cannot connect to server. Make sure the backend is running on port 5000.'
-          : 'Registration failed. Please try again.');
+      const msg = err.response?.data?.message || 'Google sign-up failed.';
       setError(msg);
       toast.error(msg);
     } finally {
@@ -40,30 +30,10 @@ export default function Signup() {
     }
   };
 
-  const inputClass =
-    'w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors';
-
-  const field = (key, label, type = 'text', placeholder = '') => (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
-      <input
-        type={type}
-        required
-        value={form[key]}
-        onChange={e => { setError(''); setForm(f => ({ ...f, [key]: e.target.value })); }}
-        placeholder={placeholder}
-        className={inputClass}
-      />
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2.5">
@@ -75,99 +45,51 @@ export default function Signup() {
           <p className="text-slate-500 text-sm mt-3">Create your account</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          {/* Role Selector */}
-          <div className="mb-6">
-            <p className="text-sm font-medium text-slate-700 mb-3">Register as</p>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: 'consumer', label: 'Consumer', desc: 'Protect your content' },
-                { value: 'admin', label: 'Admin', desc: 'Platform administrator' },
-              ].map(({ value, label, desc }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, role: value }))}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    form.role === value
-                      ? value === 'admin'
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-blue-500 bg-blue-50'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <p className={`text-sm font-semibold ${
-                    form.role === value
-                      ? value === 'admin' ? 'text-purple-700' : 'text-blue-700'
-                      : 'text-slate-700'
-                  }`}>{label}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
-                </button>
-              ))}
-            </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-6">
+          <div className="text-center space-y-1">
+            <p className="text-slate-700 font-medium">Sign up with Google</p>
+            <p className="text-xs text-slate-400">One click — no password, no forms</p>
           </div>
 
-          {/* Error Banner */}
           {error && (
-            <div className="mb-4 flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
               <AlertCircle size={15} className="text-red-500 mt-0.5 shrink-0" />
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {field('name', 'Full Name', 'text', 'John Doe')}
-            {field('email', 'Email', 'email', 'you@example.com')}
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogle}
+              onError={() => setError('Google sign-up was cancelled or failed.')}
+              theme="outline"
+              size="large"
+              shape="rectangular"
+              width="320"
+              text="signup_with"
+            />
+          </div>
 
-            {/* Password with toggle */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  required
-                  value={form.password}
-                  onChange={e => { setError(''); setForm(f => ({ ...f, password: e.target.value })); }}
-                  placeholder="Min. 6 characters"
-                  className={inputClass + ' pr-10'}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-slate-400 mt-1">Minimum 6 characters</p>
+          {loading && (
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+              <Loader size={14} className="animate-spin" /> Setting up your account...
             </div>
+          )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3 font-semibold text-white rounded-lg transition-colors flex items-center justify-center gap-2 mt-2 ${
-                form.role === 'admin'
-                  ? 'bg-purple-600 hover:bg-purple-700 disabled:opacity-60'
-                  : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-60'
-              }`}
-            >
-              {loading && <Loader size={15} className="animate-spin" />}
-              {loading ? 'Creating account...' : `Create ${form.role === 'admin' ? 'Admin' : 'Consumer'} Account`}
-            </button>
-          </form>
+          {/* What you get */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+            {['Upload & analyze content for copyright violations', 'AI-powered similarity detection', 'YouTube video comparison', 'Real-time alerts & violation tracking'].map((item, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                {item}
+              </div>
+            ))}
+          </div>
 
-          <p className="text-center text-sm text-slate-500 mt-6">
+          <p className="text-center text-sm text-slate-500">
             Already have an account?{' '}
             <Link to="/login" className="text-blue-600 font-medium hover:underline">Sign In</Link>
           </p>
-
-          {/* Backend hint */}
-          <div className="mt-5 pt-4 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center">
-              Backend must be running on{' '}
-              <code className="bg-slate-100 text-slate-600 px-1 py-0.5 rounded text-xs">localhost:5000</code>
-            </p>
-          </div>
         </div>
       </motion.div>
     </div>

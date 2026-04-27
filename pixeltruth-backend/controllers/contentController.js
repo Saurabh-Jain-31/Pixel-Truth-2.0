@@ -32,8 +32,8 @@ const uploadAndAnalyze = async (req, res, next) => {
       meta: { uploadId: upload._id },
     });
 
-    // Run analysis pipeline
-    const result = await analyzeContent(filePath, mimetype);
+    // Run analysis pipeline — Steps 2, 4, 6
+    const result = await analyzeContent(filePath, mimetype, upload._id, req.user._id);
 
     // Update upload with results
     upload.status = result.status;
@@ -41,10 +41,12 @@ const uploadAndAnalyze = async (req, res, next) => {
     upload.confidence = result.confidence;
     upload.matchPercent = result.matchPercent;
     upload.perceptualHash = result.perceptualHash;
+    upload.aHash = result.aHash;
     upload.featureVector = result.featureVector;
     upload.framesExtracted = result.framesExtracted;
     upload.fileType = result.fileType;
     upload.message = result.message;
+    if (result.aiInsights) upload.aiInsights = result.aiInsights;
     await upload.save();
 
     // If violation detected, create a Violation record
@@ -84,6 +86,7 @@ const uploadAndAnalyze = async (req, res, next) => {
       matchPercent: upload.matchPercent,
       framesExtracted: upload.framesExtracted,
       message: upload.message,
+      aiInsights: upload.aiInsights || null,
     });
   } catch (err) {
     next(err);

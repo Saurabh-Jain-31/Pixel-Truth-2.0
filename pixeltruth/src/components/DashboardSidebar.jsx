@@ -1,15 +1,17 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Upload, History, Bell, ChevronLeft, ChevronRight, Shield, LogOut } from 'lucide-react';
+import { LayoutDashboard, Upload, History, Bell, ChevronLeft, ChevronRight, Shield, LogOut, Video, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { logout } from '../api/auth';
 import toast from 'react-hot-toast';
 
 const consumerNav = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/dashboard/upload', icon: Upload, label: 'Upload & Analyze' },
-  { to: '/dashboard/history', icon: History, label: 'History' },
-  { to: '/dashboard/alerts', icon: Bell, label: 'Alerts' },
+  { to: '/dashboard',            icon: LayoutDashboard, label: 'Overview' },
+  { to: '/dashboard/upload',     icon: Upload,          label: 'Upload & Analyze' },
+  { to: '/dashboard/youtube',    icon: Video,           label: 'YouTube Analyzer' },
+  { to: '/dashboard/instagram',  icon: Camera,          label: 'Instagram Analyzer' },
+  { to: '/dashboard/history',    icon: History,         label: 'History' },
+  { to: '/dashboard/alerts',     icon: Bell,            label: 'Alerts' },
 ];
 
 export default function DashboardSidebar({ collapsed, onToggle }) {

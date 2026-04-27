@@ -24,6 +24,8 @@ import Overview from './pages/consumer/Overview';
 import UploadAnalyze from './pages/consumer/UploadAnalyze';
 import History from './pages/consumer/History';
 import ConsumerAlerts from './pages/consumer/ConsumerAlerts';
+import YoutubeAnalyze from './pages/consumer/YoutubeAnalyze';
+import InstagramAnalyze from './pages/consumer/InstagramAnalyze';
 
 // Admin Dashboard
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -58,6 +60,8 @@ export default function App() {
               <Route path="/dashboard/upload" element={<UploadAnalyze />} />
               <Route path="/dashboard/history" element={<History />} />
               <Route path="/dashboard/alerts" element={<ConsumerAlerts />} />
+              <Route path="/dashboard/youtube" element={<YoutubeAnalyze />} />
+              <Route path="/dashboard/instagram" element={<InstagramAnalyze />} />
             </Route>
           </Route>
 
