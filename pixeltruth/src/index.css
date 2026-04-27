@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0f172a;
+  --color-secondary: #1e293b;
+  --color-accent: #38bdf8;
+  --color-accent-dark: #0ea5e9;
+  --color-surface: #1e293b;
+  --color-border: #334155;
+  --color-text: #e2e8f0;
+  --color-muted: #94a3b8;
+  --color-safe: #22c55e;
+  --color-suspicious: #f59e0b;
+  --color-danger: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+  font-family: 'Inter', 'JetBrains Mono', monospace, sans-serif;
+  margin: 0;
+}
+
+/* Fix: inputs always have dark text on light bg, light text on dark bg */
+input,
+textarea,
+select {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
+/* Auth pages use light bg — ensure crisp dark text */
+.auth-input {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+}
+
+/* Dashboard inputs (dark theme) */
+.dark-input {
+  color: #e2e8f0 !important;
+  background-color: #1e293b !important;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
+}
