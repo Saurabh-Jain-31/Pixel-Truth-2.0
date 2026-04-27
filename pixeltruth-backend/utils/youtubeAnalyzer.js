@@ -194,7 +194,51 @@ Respond ONLY with valid JSON (no markdown, no explanation):
   }
 }
 
-// ─── Gemini: assess if a similar video is a copyright violation ───────────────
+// ─── Gemini: deep analysis report for a candidate video ──────────────────────
+async function deepAnalyzeCandidate(source, candidate, similarity, channelStats) {
+  if (!process.env.GEMINI_API_KEY) return null;
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const subCount = channelStats?.subscriberCount ? parseInt(channelStats.subscriberCount).toLocaleString() : 'unknown';
+    const prompt = `You are a senior YouTube copyright attorney and digital forensics expert.
+
+ORIGINAL VIDEO:
+- Title: "${source.title}"
+- Channel: "${source.channel}"
+- Published: ${source.publishedAt}
+- Views: ${source.viewCount || 'unknown'}
+
+POTENTIALLY INFRINGING VIDEO:
+- Title: "${candidate.title}"
+- Channel: "${candidate.channel}" (${subCount} subscribers)
+- Published: ${candidate.publishedAt}
+- Visual similarity: ${similarity}%
+- Description: "${candidate.description || 'none'}"
+
+Provide a comprehensive analysis. Respond ONLY with valid JSON (no markdown):
+{
+  "verdict": string ("Definite Violation" | "Likely Violation" | "Possible Violation" | "Probably Safe" | "Cannot Determine"),
+  "confidence": number (0-100),
+  "monetizationRisk": string ("High" | "Medium" | "Low"),
+  "monetizationRiskReason": string (max 100 chars),
+  "legalStrength": string ("Strong Case" | "Moderate Case" | "Weak Case" | "No Case"),
+  "deepAnalysis": string (2-3 sentence professional analysis of the copyright situation, max 300 chars),
+  "evidencePoints": string[] (3-5 specific evidence points supporting the verdict),
+  "immediateActions": string[] (2-3 specific immediate actions the original creator should take RIGHT NOW),
+  "longTermActions": string[] (2-3 long-term protective measures),
+  "estimatedTimeToResolve": string (e.g. "24-48 hours", "1-2 weeks", "1-3 months"),
+  "suggestedAction": string ("File DMCA Takedown" | "Send Copyright Strike" | "Monitor Closely" | "No Action Needed" | "Seek Legal Advice")
+}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim()
+      .replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+    return JSON.parse(text);
+  } catch (err) {
+    console.error('[Gemini Deep]', err.message);
+    return null;
+  }
+}
 async function assessCopyrightViolation(sourceTitle, sourceChannel, candidateTitle, candidateChannel, similarity) {
   if (!process.env.GEMINI_API_KEY) return null;
   try {
@@ -235,7 +279,63 @@ function computeSimilarityScore(sourceHash, candidateHash, titleScore, sourceAHa
   return Math.round(dScore * 0.35 + aScore * 0.35 + titleScore * 0.30);
 }
 
-// ─── Compute what IS similar and what is NOT similar ─────────────────────────
+// ─── Fetch channel statistics ─────────────────────────────────────────────────
+async function fetchChannelStats(channelId) {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey || !channelId) return null;
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+    const { data } = await axios.get(url, { timeout: 6000 });
+    const ch = data.items?.[0];
+    if (!ch) return null;
+    return {
+      name: ch.snippet.title,
+      subscriberCount: ch.statistics.subscriberCount,
+      videoCount: ch.statistics.videoCount,
+      viewCount: ch.statistics.viewCount,
+      joinedAt: ch.snippet.publishedAt,
+      country: ch.snippet.country || null,
+      isVerified: ch.statistics.subscriberCount > 100000,
+    };
+  } catch { return null; }
+}
+
+// ─── Parse ISO 8601 duration to seconds ──────────────────────────────────────
+function parseDuration(iso) {
+  if (!iso) return 0;
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return (parseInt(m[1] || 0) * 3600) + (parseInt(m[2] || 0) * 60) + parseInt(m[3] || 0);
+}
+
+// ─── Detect re-upload based on dates ─────────────────────────────────────────
+function detectReupload(sourceDate, candidateDate) {
+  const src = new Date(sourceDate);
+  const cand = new Date(candidateDate);
+  const diffDays = Math.round((cand - src) / (1000 * 60 * 60 * 24));
+  if (diffDays > 1) return { isReupload: true, daysAfter: diffDays };
+  if (diffDays < -1) return { isReupload: false, daysBefore: Math.abs(diffDays) };
+  return { isReupload: false, sameTime: true };
+}
+
+// ─── Engagement anomaly score ─────────────────────────────────────────────────
+// Low views but high likes = suspicious bot activity or private sharing
+// Very high views but 0 comments = possible view farming
+function engagementScore(viewCount, likeCount, commentCount) {
+  if (!viewCount) return { score: 50, label: 'Unknown', anomaly: false };
+  const v = parseInt(viewCount) || 0;
+  const l = parseInt(likeCount) || 0;
+  const c = parseInt(commentCount) || 0;
+  if (v === 0) return { score: 50, label: 'No views', anomaly: false };
+  const likeRatio = l / v;
+  const commentRatio = c / v;
+  let score = 100;
+  let anomaly = false;
+  if (likeRatio > 0.15) { score -= 20; anomaly = true; } // unusually high like ratio
+  if (commentRatio === 0 && v > 10000) { score -= 15; anomaly = true; } // no comments on popular video
+  if (v > 1000000 && l < 100) { score -= 30; anomaly = true; } // viral but no likes
+  return { score: Math.max(0, score), label: anomaly ? 'Anomalous' : 'Normal', anomaly };
+}
 function computeDifferences(source, candidate, titleScore, similarity) {
   const similar = [];
   const different = [];
@@ -295,57 +395,65 @@ async function analyzeYouTubeVideo(youtubeUrl) {
   const videoId = extractVideoId(youtubeUrl);
   if (!videoId) throw new Error('Invalid YouTube URL. Please provide a valid YouTube link.');
 
-  // Step 4: Fetch source video metadata
+  // 1. Fetch source video metadata + channel stats
   const source = await fetchVideoMetadata(videoId);
+  const sourceChannelStats = await fetchChannelStats(source.channelId);
 
-  // Step 2: Compute dual hash of source thumbnail
+  // 2. Compute dual hash of source thumbnail
   const sourceHashes = await thumbnailHashes(source.thumbnail);
 
-  // Step 4: Gemini analysis with copyright verdict
+  // 3. Gemini analysis with copyright verdict
   const geminiInsights = await analyzeWithGemini(
-    source.thumbnail,
-    source.title,
-    source.description || '',
-    source.channel
+    source.thumbnail, source.title, source.description || '', source.channel
   );
 
-  // Step 4: Multi-keyword scanning
+  // 4. Multi-keyword scanning
   const primaryQuery = geminiInsights?.searchKeywords?.join(' ') || source.title;
-  const extraKeywords = [
-    source.title,
-    ...(source.tags?.slice(0, 2) || []),
-  ].filter(k => k !== primaryQuery);
-
+  const extraKeywords = [source.title, ...(source.tags?.slice(0, 2) || [])].filter(k => k !== primaryQuery);
   const candidates = await searchSimilarVideos(primaryQuery, videoId, extraKeywords);
 
-  // Step 6: Score + copyright assessment for each candidate
+  // 5. Score + deep analysis for each candidate
   const results = await Promise.all(
     candidates.map(async (c) => {
       const cHashes = await thumbnailHashes(c.thumbnail);
       const titleScore = titleSimilarity(source.title, c.title);
       const similarity = computeSimilarityScore(
-        sourceHashes.dHash, cHashes.dHash,
-        titleScore,
-        sourceHashes.aHash, cHashes.aHash
+        sourceHashes.dHash, cHashes.dHash, titleScore, sourceHashes.aHash, cHashes.aHash
       );
 
-      // Step 6 thresholds
+      // Risk level
       let riskLevel = 'Low';
       if (similarity >= 90) riskLevel = 'High Risk';
       else if (similarity >= 70) riskLevel = 'Suspicious';
 
-      // Compute what IS and IS NOT similar
+      // Differences
       const differences = computeDifferences(source, c, titleScore, similarity);
 
-      // Run copyright assessment only for suspicious/high-risk (save API quota)
-      let copyrightAssessment = null;
-      if (similarity >= 50) {
-        copyrightAssessment = await assessCopyrightViolation(
-          source.title, source.channel,
-          c.title, c.channel,
-          similarity
-        );
+      // Re-upload detection
+      const reuploadInfo = detectReupload(source.publishedAt, c.publishedAt);
+
+      // Channel stats for candidate
+      let candidateChannelStats = null;
+      if (similarity >= 40) {
+        // Fetch channel ID from search result — need extra API call
+        try {
+          const vidUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${c.id}&key=${process.env.YOUTUBE_API_KEY}`;
+          const { data } = await axios.get(vidUrl, { timeout: 5000 });
+          const channelId = data.items?.[0]?.snippet?.channelId;
+          if (channelId) candidateChannelStats = await fetchChannelStats(channelId);
+        } catch {}
       }
+
+      // Deep AI analysis for suspicious/high-risk
+      let deepAnalysis = null;
+      if (similarity >= 50) {
+        deepAnalysis = await deepAnalyzeCandidate(source, c, similarity, candidateChannelStats);
+      }
+
+      // Engagement anomaly
+      const engagement = c.viewCount
+        ? engagementScore(c.viewCount, c.likeCount, c.commentCount)
+        : null;
 
       return {
         ...c,
@@ -353,8 +461,21 @@ async function analyzeYouTubeVideo(youtubeUrl) {
         riskLevel,
         titleScore,
         differences,
-        copyrightAssessment,
+        reuploadInfo,
+        candidateChannelStats,
+        deepAnalysis,
+        engagement,
         copyrightComplaintUrl: getCopyrightComplaintUrl(c.id),
+        // Keep backward compat
+        copyrightAssessment: deepAnalysis ? {
+          isCopyrightViolation: ['Definite Violation', 'Likely Violation'].includes(deepAnalysis.verdict),
+          confidence: deepAnalysis.confidence,
+          verdict: deepAnalysis.verdict === 'Definite Violation' ? 'Likely Violation'
+            : deepAnalysis.verdict === 'Probably Safe' ? 'Probably Safe'
+            : deepAnalysis.verdict,
+          reason: deepAnalysis.deepAnalysis,
+          suggestedAction: deepAnalysis.suggestedAction,
+        } : null,
       };
     })
   );
@@ -363,10 +484,14 @@ async function analyzeYouTubeVideo(youtubeUrl) {
 
   const highRisk = results.filter(r => r.riskLevel === 'High Risk');
   const suspicious = results.filter(r => r.riskLevel === 'Suspicious');
-  const violations = results.filter(r => r.copyrightAssessment?.isCopyrightViolation);
+  const violations = results.filter(r => r.deepAnalysis?.verdict?.includes('Violation'));
+  const reuploadCount = results.filter(r => r.reuploadInfo?.isReupload).length;
+
+  // Source duration in seconds
+  const sourceDurationSec = parseDuration(source.duration);
 
   return {
-    source,
+    source: { ...source, channelStats: sourceChannelStats, durationSec: sourceDurationSec },
     geminiInsights,
     similarVideos: results,
     summary: {
@@ -374,6 +499,7 @@ async function analyzeYouTubeVideo(youtubeUrl) {
       highRisk: highRisk.length,
       suspicious: suspicious.length,
       possibleViolations: violations.length,
+      reuploadDetected: reuploadCount,
       overallStatus: highRisk.length > 0 ? 'High Risk' : suspicious.length > 0 ? 'Suspicious' : 'Safe',
     },
   };

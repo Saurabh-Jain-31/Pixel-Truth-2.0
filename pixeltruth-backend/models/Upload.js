@@ -83,6 +83,26 @@ const uploadSchema = new mongoose.Schema(
       riskFactors: [String],
       contentCategory: String,
     },
+
+    // Cross-platform matches found
+    platformMatches: [{
+      platform: String,
+      id: String,
+      title: String,
+      channel: String,
+      uploadedAt: Date,
+      url: String,
+      similarity: Number,
+      riskLevel: String,
+    }],
+
+    // File integrity
+    fileHash: { type: String, default: null }, // SHA-256 of original file
+
+    // Evidence & legal
+    evidenceBlockId: { type: mongoose.Schema.Types.ObjectId, ref: 'EvidenceChain' },
+    takedownStatus: { type: String, enum: ['none', 'pending', 'sent', 'resolved'], default: 'none' },
+    takedownNote: { type: String, default: '' },
   },
   { timestamps: true }
 );

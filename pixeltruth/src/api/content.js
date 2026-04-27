@@ -1,6 +1,5 @@
 import api from './axios';
 
-// Upload file for analysis
 export const uploadContent = (formData, onProgress) =>
   api.post('/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -9,11 +8,9 @@ export const uploadContent = (formData, onProgress) =>
     },
   });
 
-// Get analysis result for a specific upload
 export const getResult = (id) => api.get(`/results/${id}`);
-
-// Get upload history for current user
 export const getHistory = () => api.get('/history');
-
-// Get a single history item
 export const getHistoryItem = (id) => api.get(`/history/${id}`);
+export const requestTakedown = (id, note, targetUrl) => api.post(`/history/${id}/takedown`, { note, targetUrl });
+export const getEvidencePackage = (id) => api.get(`/history/${id}/evidence`);
+export const verifyChain = () => api.get('/evidence/verify');
